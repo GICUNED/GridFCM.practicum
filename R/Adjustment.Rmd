@@ -1,0 +1,276 @@
+---
+title: "Código Funciones de Ajuste del Sistema"
+author: "Alejandro Torrecilla, Nuria Carrasco y Sara López"
+date: Mayo 30, 2024
+output: word_document
+---
+
+```{r include=FALSE}
+  library(bertin)
+  library(GridFCM.practicum)
+```
+
+# Wimp
+Importamos la Wimp con la que vamos a trabajar
+```{r wimp_import}
+path <- '../data.RData'
+load(path)
+wimp <- data$grids$P0102371$WT
+```
+
+```{r wimp_display, fig.width = 10, fig.height = 10, echo=FALSE}
+bertin(wimp$openrepgrid, colors = c("palegreen", "darkgreen"))
+```
+
+# Función de cálculo del ajuste
+Esta función calcula la distancia Euclídia y la correlación entre dos vectores dados. Como parámetros, además de los dos vectores, permite elegir si devolver la distancia normalizada o no, el valor máximo utilizado para dicha normalización y una lista de datos en caso de querer filtrar los constructos utilizados (por ejemplo, utilizar solo constructos centrales/nucleares)
+
+**Uso:** calculate_adjustment_init_end (vector_init, vector_end,,, c(1,1,0,0,1,0,1,0))
+
+```{r function_adjustment_init_end}
+calculate_adjustment_init_end <- function(vector_init, vector_end, normalize = TRUE, MaxScale = 1, filtered_constructs = c(1)) {
+
+  # Use only filtered_constructs:
+  if (length(filtered_constructs) != 0) {
+    n <- length(filtered_constructs)
+    elems <- 1:n
+
+    for (i in elems) {
+      if (filtered_constructs[n+1-i] == 0) {
+        vector_end <- vector_end[-n-1+i]
+        vector_init <- vector_init[-n-1+i]
+      }
+    }
+  }
+
+  # Calculate the euclidean distance between both vectors
+  eu_distance <- sqrt(sum((vector_end - vector_init)^2))
+
+  # Normalize the Euclidean distance if specified
+  distance <- if (normalize) eu_distance / (2 * MaxScale * sqrt(length(vector_end)))  else eu_distance
+
+  # Calculate the correlation between the vectors (cosine)
+  #WARNING: Return NaN if one of the vectors is "0". This may happen with the filtering.
+  correlation <- sum(vector_end * vector_init) / (norm(vector_end, type = "2") * norm(vector_init, type = "2"))
+
+  # General adjustment value (magnitude of the calculated vector)
+  magnitude <- if (normalize) 1 - (sqrt((1-correlation)^2 + distance^2)) / sqrt(5) else NULL
+
+  # Return the results
+  return(list(distance = distance, correlation = correlation, magnitude=magnitude))
+}
+```
+
+## Salida de la función de cálculo de ajuste
+```{r calculate_adjustment_init_end}
+adjustment <- calculate_adjustment_init_end(wimp$self$standarized,wimp$ideal$standarized)
+print(adjustment)
+```
+
+# Función de cálculo de ajuste con la wimp
+Hace lo mismo que la anterior, pero se puede meter directamente el objeto wimp
+
+**Uso:** calculate_adjustment_self_ideal (wimp,TRUE,c(1,1,0,0,1,0,1,0)
+```{r function_adjustment_self_ideal}
+calculate_adjustment_self_ideal <- function(wimp, normalize = TRUE, filtered_constructs = c(1)) {
+
+  # Get ideal and self vectors from the wimp variable
+  vector_ideal <- wimp$ideal[[2]]
+  vector_self <- wimp$self[[2]]
+
+  return(calculate_adjustment_init_end(vector_ideal, vector_self, normalize, 1,filtered_constructs))
+
+}
+```
+## Salida de la función de cálculo de ajuste con la wimp
+Como en la función anterior hemos usado los vectores self e ideal, la salida de ambas fuciones debe de ser la misma
+```{r calculate_adjustment_self_ideal}
+adjustment <- calculate_adjustment_self_ideal(wimp)
+print(adjustment)
+```
+
+# Función de cálculo de la norma del vector
+Acepta como parámetros el vector del que queremos calcular la norma, la dimensión máxima y una lista de constructos si queremos filtrarlos (ejemplo, usar solo constructos centrales)
+
+**Uso:** calculate_normalized_length_vector (vector,,, c(1,1,0,0,1,0,1,0))
+```{r function_calculate_normalized_length_vector}
+calculate_normalized_length_vector <- function(vector, normalize = TRUE, MaxScale = 1, filtered_constructs = c(1)) {
+
+  # Use only filtered_constructs:
+  if (length(filtered_constructs) != 0) {
+    n <- length(filtered_constructs)
+    elems <- 1:n
+
+    for (i in elems) {
+      if (filtered_constructs[n+1-i] == 0) {
+        vector <- vector[-n-1+i]
+      }
+    }
+  }
+
+  # Calculate the length of the vector (Euclidean norm)
+  eu_length <- norm(vector, type = "2")
+
+  # Normalize the Euclidean distance if specified
+  eu_length <- if (normalize) eu_length / (MaxScale * sqrt(length(vector)))  else eu_length
+
+  # Return the result
+  return(eu_length)
+}
+```
+## Salida de la función de cálculo de la norma de un vector
+Utilizamos el vector ideal a modo de ejemplo 
+```{r calculate_normalized_length_vector}
+eu_length <- calculate_normalized_length_vector (wimp$ideal$standarized)
+print(eu_length)
+```
+
+# Función de cálculo de ajuste
+Esta función calcula la distancia Euclídia, la correlación y la magnitud del ajuste para:
+- El Self
+- El Self hipotético cuando cada constructo va del self al ideal (considerando y no considerando el cambio original en el constructo)
+- El Self hipotético cuando cada constructo se mueve un paso hacia el yo ideal (considerando y no considerando el cambio original en el constructo)
+- El Self hipotético en la matriz de pesos de la WIMP
+- Para los selves hipotéticos, se calcula un índice global como la media del ajuste para cada constructo
+- Todo lo anterior para el ideal
+- El índice o magnitud de ajuste como indefinición del self y el ideal
+Como parámetros de entrada acepta el objeto wimp y la lista de constructos a filtrar.
+
+**Uso:** calculate_adjustment_wimp (wimp,c(1,1,0,0,1,0,1,0))
+```{r function_calculate_adjustment_wimp}
+calculate_adjustment_wimp <- function(wimp, filtered_constructs = c(1)) {
+  adjustment <- list()
+
+  # Get the ideal and self vectors
+  vector_ideal <- wimp$ideal[[2]]
+  vector_self <- wimp$self[[2]]
+
+  # CALCULATE ADJUSTMENT OF SELF
+  adjustment$self <- list()
+  adjustment$self <- calculate_adjustment_init_end(vector_self, vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+
+  # Add labels to adjustment$self
+  names(adjustment$self) <- c("distance", "correlation", "adjustment")
+
+  # CALCULATE ADJUSTMENT OF HYPOTHETICAL SELF. 4 options:
+  # ToIdeal: Contains the adjustment index for all the hypothetical-self, when each construct change to the ideal
+  # ToIdeal2: Same as ToIdeal, but removing the change in the construct
+  # OneStep: Contains the adjustment index for all the hypothetical-self, when each construct change 1-step to the ideal
+  # OneStep2: Same as OneStep, but removing the change in the construct
+  adjustment$future <- list(
+    ToIdeal = list(),
+    ToIdeal2 = list(),
+    OneStep = list(),
+    OneStep2 = list(),
+    Wimp = list()
+  )
+
+  # Calculate vector_future
+  # Calculate the difference between the ideal and self vectors
+  difference <- vector_ideal - vector_self
+  difference_OneStep <- (vector_ideal - vector_self) / ifelse(abs(vector_ideal - vector_self) == 0, 1, abs(vector_ideal - vector_self))
+
+
+  # Get the length of the difference vector
+  length <- length(difference)
+
+  # Build the matrix with the difference on the diagonal and zeros elsewhere
+  change_vectors_ToIdeal <- diag(difference, nrow = length, ncol = length)
+  # change_vectors_OneStep <- change_vectors_ToIdeal / abs(change_vectors_ToIdeal)
+
+  change_vectors_OneStep <- diag(difference_OneStep, nrow = length, ncol = length) * 2 / 3
+
+  # Get the weight matrix
+  weight_matrix <- wimp$scores$weights
+
+  # Multiply change_vectors by the weight matrix for the 2 options (ToIdeal and OneStep)
+  result_matrix_ToIdeal <- change_vectors_ToIdeal %*% weight_matrix
+  result_matrix_OneStep <- change_vectors_OneStep %*% weight_matrix
+
+  # Compose vector_self to sum by rows
+  vector_self_row_sum <- matrix(vector_self, nrow = length, ncol = length, byrow = TRUE)
+
+  # Sum the result with the vector_self and change_vectors for all the options
+  vector_future_ToIdeal <- vector_self_row_sum + change_vectors_ToIdeal + result_matrix_ToIdeal
+  vector_future_ToIdeal2 <- vector_self_row_sum + result_matrix_ToIdeal
+
+  vector_future_OneStep <- vector_self_row_sum + change_vectors_OneStep + result_matrix_OneStep
+  vector_future_OneStep2 <- vector_self_row_sum + result_matrix_OneStep
+
+  # Limit values in vector_future to be within -1 and +1 for all the options
+  vector_future_ToIdeal <- pmax(pmin(vector_future_ToIdeal, 1), -1)
+  vector_future_ToIdeal2 <- pmax(pmin(vector_future_ToIdeal2, 1), -1)
+  vector_future_OneStep <- pmax(pmin(vector_future_OneStep, 1), -1)
+  vector_future_OneStep2 <- pmax(pmin(vector_future_OneStep2, 1), -1)
+
+  # Iterate over vectors in vector_future for all the options
+  for (i in 1:nrow( vector_future_ToIdeal)) {
+    # Calculate adjustment for vector_future and ideal vectors
+    adjustment$future$ToIdeal[[i]] <- calculate_adjustment_init_end(vector_future_ToIdeal[i,], vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    # Add labels to adjustment$future
+    names(adjustment$future$ToIdeal[[i]]) <- c("distance", "correlation", "adjustment")
+  }
+  for (i in 1:nrow( vector_future_ToIdeal2)) {
+    # Calculate adjustment for vector_future and ideal vectors
+    adjustment$future$ToIdeal2[[i]] <- calculate_adjustment_init_end(vector_future_ToIdeal2[i,], vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    # Add labels to adjustment$future
+    names(adjustment$future$ToIdeal2[[i]]) <- c("distance", "correlation", "adjustment")
+  }
+  for (i in 1:nrow( vector_future_OneStep)) {
+    # Calculate adjustment for vector_future and ideal vectors
+    adjustment$future$OneStep[[i]] <- calculate_adjustment_init_end(vector_future_OneStep[i,], vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    # Add labels to adjustment$future
+    names(adjustment$future$OneStep[[i]]) <- c("distance", "correlation", "adjustment")
+  }
+  for (i in 1:nrow( vector_future_OneStep2)) {
+    # Calculate adjustment for vector_future and ideal vectors
+    adjustment$future$OneStep2[[i]] <- calculate_adjustment_init_end(vector_future_OneStep2[i,], vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    # Add labels to adjustment$future
+    names(adjustment$future$OneStep2[[i]]) <- c("distance", "correlation", "adjustment")
+  }
+
+
+
+  # Calculate adjustment index for Wimp vectors
+  for (i in 1:nrow(wimp$scores$implications)) {
+    # Calculate adjustment for vector in wimp$scores$implications and ideal vectors
+    adjustment$future$Wimp[[i]] <- calculate_adjustment_init_end(wimp$scores$implications[i,], vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    # Add labels to adjustment$future
+    names(adjustment$future$Wimp[[i]]) <- c("distance", "correlation", "adjustment")
+  }
+
+  # Calculate a Global Index for each option in adjustment$future
+  # Iterate each list in adjustment$future
+  for (list_name in names(adjustment$future)) {
+
+    # Calculate average of all adjustment values for each option
+    mean_adjustment <- mean(sapply(adjustment$future[[list_name]], function(x) as.numeric(x$adjustment)))
+
+    # Create "GlobalIndex" element in each list y assign the calculated average
+    adjustment$future[[list_name]]$GlobalIndex <- mean_adjustment
+  }
+
+
+  # CALCULATE ADJUSTMENT AS INDEFINITION OF SELF AND IDEAL
+
+  adjustment$indefinition <- list(
+    Self = calculate_normalized_length_vector(vector_self, TRUE, 1, filtered_constructs = filtered_constructs),
+    Ideal = calculate_normalized_length_vector(vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+  )
+  # Add labels to adjustment$indefinition
+  names(adjustment$indefinition) <- c("Indefinition of Self", "Indefinition of Ideal")
+
+  # Return adjustment
+  return(adjustment)
+
+}
+```
+## Salida de la función de ajuste de la wimp
+```{r calculate_adjustment_wimp}
+adjustment <- calculate_adjustment_wimp (wimp)
+print(adjustment)
+```
+
+#Grafica
+
+plot_adjustment_self_ideal
