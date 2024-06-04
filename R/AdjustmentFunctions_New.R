@@ -73,7 +73,7 @@ calculate_adjustment_self_ideal <- function(wimp, normalize = TRUE, filtered_con
 
 }
 
-# calculate_adjustment_vector ------------------------------------------------------------
+# calculate_normalized_length_vector ------------------------------------------------------------
 #'
 #' This function calculates the normalized length of a vector.
 #'
@@ -83,10 +83,10 @@ calculate_adjustment_self_ideal <- function(wimp, normalize = TRUE, filtered_con
 #' @param filtered_constructs In case we want to use only specific values (e.g use nuclear constructs only). Vector with 0s and 1s.
 #'Only the values from the vector at positions where there is a 1 will be included.
 #' @return The length (normalized or not) of the vector.
-#' @examples calculate_adjustment_vector (vector,,, c(1,1,0,0,1,0,1,0))
+#' @examples calculate_normalized_length_vector (vector,,, c(1,1,0,0,1,0,1,0))
 #' @export
 
-calculate_adjustment_vector <- function(vector, normalize = TRUE, MaxScale = 1, filtered_constructs = c(1)) {
+calculate_normalized_length_vector <- function(vector, normalize = TRUE, MaxScale = 1, filtered_constructs = c(1)) {
 
   # Use only filtered_constructs:
   if (length(filtered_constructs) != 0) {
@@ -246,8 +246,8 @@ calculate_adjustment_wimp <- function(wimp, filtered_constructs = c(1)) {
   # CALCULATE ADJUSTMENT AS INDEFINITION OF SELF AND IDEAL
 
   adjustment$indefinition <- list(
-    Self = calculate_adjustment_vector(vector_self, TRUE, 1, filtered_constructs = filtered_constructs),
-    Ideal = calculate_adjustment_vector(vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
+    Self = calculate_normalized_length_vector(vector_self, TRUE, 1, filtered_constructs = filtered_constructs),
+    Ideal = calculate_normalized_length_vector(vector_ideal, TRUE, 1, filtered_constructs = filtered_constructs)
   )
   # Add labels to adjustment$indefinition
   names(adjustment$indefinition) <- c("Indefinition of Self", "Indefinition of Ideal")
