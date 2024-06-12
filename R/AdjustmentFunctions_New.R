@@ -409,7 +409,7 @@ Adjustment_self_ideal <- function(wimp, normalize = TRUE, filtered_constructs = 
 #' load_data_adjustment ------------------------------------------------------------
 #'
 #' This function extracts from 'data' the necessary values to study emotional adjustment.
-#'
+#' @param p_corte Cut-off point to filter out important constructs
 #' @return A data frame containing the extracted data for analysis. The data frame includes the following columns:
 #'   ID - Identification code for each participant.
 #'   dist.w1 - Distance measure for emotional adjustment in the WIMP test.
@@ -441,8 +441,12 @@ Adjustment_self_ideal <- function(wimp, normalize = TRUE, filtered_constructs = 
 #'   mcq.test - MCQ test scores (Metacognition).
 #'   mcq.retest - MCQ retest scores (Metacognition).
 
-load_data_adjustment <- function () {
+load_data_adjustment <- function (p_corte=10) {
   data(data)
+
+  #' Cut-off point to filter
+  pcorte=p_corte
+
   df_data <- data.frame(
     ID = character(),
     dist.w1 = numeric(),
@@ -479,8 +483,33 @@ load_data_adjustment <- function () {
     id_index <- match(data$dataset$ID[i], names(data$grids))
 
     if (!is.na(id_index)) {
-      adjustw1 <- calculate_adjustment_wimp(data$grids[[id_index]][[3]])
-      adjustw2 <- calculate_adjustment_wimp(data$grids[[id_index]][[4]])
+
+      v1=0
+      v2=0
+      v3=0
+      v4=0
+      v5=0
+      v6=0
+      v7=0
+      v8=0
+      v9=0
+      v10=0
+
+      if (data$dataset$cen.ord.c1.test[i]<=pcorte){v1=1}
+      if (data$dataset$cen.ord.c2.test[i]<=pcorte){v2=1}
+      if (data$dataset$cen.ord.c3.test[i]<=pcorte){v3=1}
+      if (data$dataset$cen.ord.c4.test[i]<=pcorte){v4=1}
+      if (data$dataset$cen.ord.c5.test[i]<=pcorte){v5=1}
+      if (data$dataset$cen.ord.c6.test[i]<=pcorte){v6=1}
+      if (data$dataset$cen.ord.c7.test[i]<=pcorte){v7=1}
+      if (data$dataset$cen.ord.c8.test[i]<=pcorte){v8=1}
+      if (data$dataset$cen.ord.c9.test[i]<=pcorte){v9=1}
+      if (data$dataset$cen.ord.c10.test[i]<=pcorte){v10=1}
+      vfilt<- c(v1,v2,v3,v4,v5,v6,v7,v8,v9,v10)
+
+
+      adjustw1 <- calculate_adjustment_wimp(data$grids[[id_index]][[3]], vfilt)
+      adjustw2 <- calculate_adjustment_wimp(data$grids[[id_index]][[4]], vfilt)
 
       row_data <- data.frame(
         ID = data$dataset$ID[i],
